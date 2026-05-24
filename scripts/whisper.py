@@ -120,10 +120,12 @@ def _build_multipart(fields: dict[str, str], file_path: Path) -> tuple[bytes, st
     buf = io.BytesIO()
 
     for name, value in fields.items():
-        buf.write(f"--{boundary}".encode()); buf.write(eol)
-        buf.write(f'Content-Disposition: form-data; name="{name}"'.encode()); buf.write(eol)
-        buf.write(eol)
-        buf.write(str(value).encode()); buf.write(eol)
+        values = value if isinstance(value, (list, tuple)) else [value]
+        for v in values:
+            buf.write(f"--{boundary}".encode()); buf.write(eol)
+            buf.write(f'Content-Disposition: form-data; name="{name}"'.encode()); buf.write(eol)
+            buf.write(eol)
+            buf.write(str(v).encode()); buf.write(eol)
 
     mimetype = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
     buf.write(f"--{boundary}".encode()); buf.write(eol)
@@ -145,12 +147,21 @@ MAX_429_RETRIES = 2
 RETRY_BASE_DELAY = 2.0
 
 
-def _post_whisper(endpoint: str, api_key: str, model: str, audio_path: Path) -> dict:
-    fields = {
+def _post_whisper(
+    endpoint: str,
+    api_key: str,
+    model: str,
+    audio_path: Path,
+    word_timestamps: bool = False,
+) -> dict:
+    fields: dict = {
         "model": model,
         "response_format": "verbose_json",
         "temperature": "0",
     }
+    if word_timestamps:
+        # OpenAI/Groq accept timestamp_granularities[] as a repeated form field.
+        fields["timestamp_granularities[]"] = "word"
     body, boundary = _build_multipart(fields, audio_path)
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -302,6 +313,50 @@ def transcribe_video(
 
     print(f"[watch] transcribed {len(segments)} segments via {backend}", file=sys.stderr)
     return segments, backend
+
+
+def transcribe_audio(
+    audio_path: Path,
+    backend: str | None = None,
+    api_key: str | None = None,
+    word_timestamps: bool = False,
+) -> tuple[list[dict], str, list[dict]]:
+    """Upload an existing audio file. Returns (segments, backend, words).
+
+    Words is empty unless word_timestamps=True. Each word is
+    {"word": str, "start": float, "end": float}.
+    """
+    if backend is None or api_key is None:
+        detected_backend, detected_key = load_api_key()
+        backend = backend or detected_backend
+        api_key = api_key or detected_key
+    if not backend or not api_key:
+        raise SystemExit("No Whisper API key available for transcribe_audio()")
+
+    if backend == "groq":
+        endpoint, model = GROQ_ENDPOINT, GROQ_MODEL
+    elif backend == "openai":
+        endpoint, model = OPENAI_ENDPOINT, OPENAI_MODEL
+    else:
+        raise SystemExit(f"Unknown whisper backend: {backend}")
+
+    response = _post_whisper(
+        endpoint, api_key, model, audio_path,
+        word_timestamps=word_timestamps,
+    )
+    segments = _segments_from_response(response)
+    words: list[dict] = []
+    if word_timestamps:
+        for w in response.get("words") or []:
+            text = (w.get("word") or "").strip()
+            if not text:
+                continue
+            words.append({
+                "word": text,
+                "start": round(float(w.get("start") or 0.0), 3),
+                "end": round(float(w.get("end") or 0.0), 3),
+            })
+    return segments, backend, words
 
 
 if __name__ == "__main__":
