@@ -2,7 +2,7 @@
   "name": "watch",
   "version": "0.2.0",
   "description": "Let Claude (or Codex) watch a video — frames + transcript + structured report. Fork of bradautomates/claude-video with scene-change frames, hook microscope, and optional Obsidian auto-save.",
-  "repository": "https://github.com/taoufik/claude-watch",
+  "repository": "https://github.com/taoufik123-collab/claude-watch",
   "author": "taoufik",
   "license": "MIT"
 }

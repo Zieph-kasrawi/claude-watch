@@ -5,8 +5,8 @@
   "author": {
     "name": "taoufik"
   },
-  "homepage": "https://github.com/taoufik/claude-watch",
-  "repository": "https://github.com/taoufik/claude-watch",
+  "homepage": "https://github.com/taoufik123-collab/claude-watch",
+  "repository": "https://github.com/taoufik123-collab/claude-watch",
   "license": "MIT",
   "keywords": ["video", "watch", "youtube", "vimeo", "tiktok", "transcription", "whisper", "yt-dlp", "ffmpeg", "multimodal", "frames", "obsidian", "second-brain", "hook-microscope"]
 }
