@@ -1,6 +1,6 @@
 ---
 name: watch
-description: Watch a video (URL or local path) like an editor. Extracts scene-change frames, pacing metrics (cuts/min, shot length), and a dense 0-10s hook microscope; pulls transcript from captions or Whisper. Produces an ingest-ready `report.md` and, after answering the user, optionally auto-ingests the analysis into your Obsidian vault (configurable via `$WATCH_VAULT_DIR`) — tied to *why* the user watched it.
+description: Watch a video (URL or local path) like an editor — scene frames, pacing metrics, 0-10s hook analysis, transcript. Produces report.md and optionally ingests it into the Obsidian vault tied to why the user watched it.
 argument-hint: "<video-url-or-path> [why you're watching it]"
 allowed-tools: Bash, Read, AskUserQuestion
 homepage: https://github.com/taoufik123-collab/claude-watch
@@ -61,11 +61,11 @@ This is a <100ms lookup. On exit 0, the script emits **nothing** — proceed to 
 
 On non-zero exit, follow the table:
 
-| Exit | Meaning | Action |
-|------|---------|--------|
-| `2` | Missing binaries (`ffmpeg` / `ffprobe` / `yt-dlp`) | Run installer |
-| `3` | No Whisper API key | Run installer to scaffold `.env`, then ask user for a key |
-| `4` | Both missing | Run installer, then ask for a key |
+| Exit | Meaning                                            | Action                                                    |
+| ---- | -------------------------------------------------- | --------------------------------------------------------- |
+| `2`  | Missing binaries (`ffmpeg` / `ffprobe` / `yt-dlp`) | Run installer                                             |
+| `3`  | No Whisper API key                                 | Run installer to scaffold `.env`, then ask user for a key |
+| `4`  | Both missing                                       | Run installer, then ask for a key                         |
 
 The installer is idempotent — safe to re-run:
 
@@ -111,6 +111,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/watch.py" "<source>" --intent "<intent stri
 Pass `--intent` whenever you have any signal from the user about why they want this video — the question they asked, a stated goal, or a brief inferred summary. Empty `--intent` works but produces less-targeted report sections.
 
 Optional flags:
+
 - `--start T` / `--end T` — focus on a section. Accepts `SS`, `MM:SS`, or `HH:MM:SS`. When either is set, fps auto-scales denser (see "Focusing on a section" below).
 - `--max-frames N` — lower the cap for tighter token budget (e.g. `--max-frames 40`)
 - `--resolution W` — change frame width in px (default 512; bump to 1024 only if the user needs to read on-screen text)
@@ -132,6 +133,7 @@ When the user asks about a specific moment — "what happens at the 2 minute mar
 - 60-180s → ~0.6 fps (100 frames, capped)
 
 Focused mode is the right call for:
+
 - Any moment/range the user names explicitly ("around 2:30", "the intro", "the last 30 seconds").
 - Any video longer than ~10 minutes where the user's question is about a specific part — running focused on the relevant section is far more useful than a sparse scan of the whole thing.
 - Re-runs after a full scan didn't have enough detail in some region.
@@ -139,6 +141,7 @@ Focused mode is the right call for:
 Transcript is auto-filtered to the same range. Frame timestamps are absolute (real video timeline, not offset-from-start).
 
 Examples:
+
 ```bash
 # Last 10 seconds of a 1 minute video
 python3 "${CLAUDE_SKILL_DIR}/scripts/watch.py" video.mp4 --start 50 --end 60
@@ -153,6 +156,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/watch.py" "$URL" --start 1:12:00
 **Step 3 — Read every frame path the script lists.** The Read tool renders JPEGs directly as images for you. Read all frames in a single message (parallel tool calls) so you see them together. The frames are in chronological order with a `t=MM:SS` timestamp so you can align them to the transcript.
 
 **Step 4 — answer the user, then fill the report.** You now have three streams of evidence:
+
 - **Frames** — what's on screen at each timestamp
 - **Transcript** — what's said at each timestamp
 - **`report.md`** — structured artifact at `<workdir>/report.md` with `<!-- pending Claude fill: ... -->` markers
@@ -160,6 +164,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/watch.py" "$URL" --start 1:12:00
 First, answer the user's question in chat citing timestamps.
 
 Then, **fill in the pending markers in `report.md` using the Edit tool**. Walk every `<!-- pending Claude fill: ... -->` in order:
+
 - **TL;DR** — 3-5 bullets through the lens of the user's intent (read from the frontmatter)
 - **Key moments** — 5-10 timestamped bullets
 - **Hook microscope interpretation** — frame-by-frame: visual change × what's said; identify the hook pattern (question, contrarian claim, in-medias-res, demo-first, etc.)
@@ -192,6 +197,7 @@ Rationale: the report is the leverage point of /watch. If the user reads everyth
 **Step 4.5 — Offer ingest into the Obsidian vault.** **Skip this step entirely if no vault was detected at Step 4.4.** Otherwise use `AskUserQuestion` once, with these options (do NOT skip if a vault was found unless the user explicitly said "don't ingest" before /watch ran):
 
 > **Question:** "Want to ingest this into your Obsidian vault?"
+>
 > - **Yes — same angle** ("<intent>")
 > - **Yes — different angle** (user specifies in the notes field)
 > - **Stage to `raw/watched/` for later**
@@ -200,6 +206,7 @@ Rationale: the report is the leverage point of /watch. If the user reads everyth
 Routing based on response:
 
 **A. Yes (same or different angle):**
+
 1. Derive the slug: take the video title from `report.md` frontmatter, slugify (lowercase, ASCII-only, hyphens, max 60 chars), append `-YYYY-MM-DD`. Example: `me-at-the-zoo-2026-05-24`.
 2. Confirm the staging dir exists at `$VAULT_DIR/raw/watched/<slug>/` (Step 4.4 already created it).
 3. The report + hero frames are already copied there from Step 4.4.
@@ -209,6 +216,7 @@ Routing based on response:
 7. Report back to the user in chat: which entity pages were touched (if any), the path to the staged report, and the `log.md` entry written.
 
 **B. Stage to `raw/watched/` for later:**
+
 1. The staging from Step 4.4 already did the file copy.
 2. Do NOT touch the wiki. Do NOT append to `log.md`.
 3. Tell the user in chat: "Staged at `$(basename $VAULT_DIR)/raw/watched/<slug>/`. Run an Ingest op against it when you're ready."
@@ -243,6 +251,7 @@ Both keys live in `~/.config/watch/.env`. The script prefers Groq when both are 
 ## Token efficiency
 
 This skill burns tokens primarily on frames. Order of magnitude:
+
 - 80 frames at 512px wide is roughly 50-80k image tokens depending on aspect ratio.
 - The transcript is cheap (a few thousand tokens at most for a 10-minute video).
 - Bumping `--resolution` to 1024 roughly quadruples the image tokens per frame. Only do it when necessary.
@@ -252,6 +261,7 @@ If you already watched a video this session and the user asks a follow-up, do **
 ## Security & Permissions
 
 **What this skill does:**
+
 - Runs `yt-dlp` locally to download the video and pull native captions when the source supports them (public data; the request goes directly to whatever host the URL points at)
 - Runs `ffmpeg` / `ffprobe` locally to extract frames as JPEGs and, when Whisper is needed, a mono 16 kHz audio clip
 - Sends the extracted audio clip to Groq's Whisper API (`api.groq.com/openai/v1/audio/transcriptions`) when `GROQ_API_KEY` is set (preferred — cheaper, faster)
@@ -263,6 +273,7 @@ If you already watched a video this session and the user asks a follow-up, do **
 - When ingest is consented to: reads and writes pages under `$VAULT_DIR/wiki/` (entities, concepts, sources, index.md) and appends to `$VAULT_DIR/log.md` — following the actions defined by the vault's Ingest op (or a generic fallback if no `CLAUDE.md` is present)
 
 **What this skill does NOT do:**
+
 - Does not upload the video itself to any API — only the extracted audio goes out, and only when native captions are missing AND Whisper is not disabled with `--no-whisper`
 - Does not access any platform account (no login, no session cookies, no posting)
 - Does not share API keys between providers (Groq key only goes to `api.groq.com`, OpenAI key only goes to `api.openai.com`)
