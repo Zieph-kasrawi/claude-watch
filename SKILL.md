@@ -1,6 +1,6 @@
 ---
 name: watch
-description: Watch a video (URL or local path) like an editor — scene frames, pacing metrics, 0-10s hook analysis, transcript. Produces report.md and optionally ingests it into the Obsidian vault tied to why the user watched it.
+description: Watch a video (URL or local path) and extract everything in it worth keeping — full timestamped transcript, key moments, the ideas and claims it makes, entities, quotable lines, and scene frames Claude actually looks at. Use whenever the founder shares a video and wants to learn from it, research it, summarize it, check what it claims, or turn it into notes — and for reviewing a video's own craft, where it also profiles pacing and the first ten seconds. Produces a structured report.md and offers to ingest it into the Obsidian vault, tied to why it was watched.
 argument-hint: "<video-url-or-path> [why you're watching it]"
 allowed-tools: Bash, Read, AskUserQuestion
 homepage: https://github.com/taoufik123-collab/claude-watch
