@@ -14,7 +14,7 @@ user-invocable: true
 
 You don't have a video input; this skill gives you one. A Python script downloads the video, extracts frames as JPEGs (one per detected shot via scene-change), gets a timestamped transcript (native captions first, then Whisper API as fallback), runs editorial pacing metrics, and microscopes the first 10 seconds at higher density. You then `Read` each frame path to see the images, combine them with the transcript to answer the user, fill the structured `report.md`, and offer to ingest the analysis into Taoufik's Second Brain.
 
-## What v2 does differently
+## What each watch produces beyond frames and a transcript
 
 - **Scene-change frame sampling** — one frame per detected shot instead of uniform ticks. Cuts the frame budget on long videos while capturing every transition.
 - **Editorial pacing metrics** — cuts/min, mean shot length, motion (when available). Lets you reason about pacing the way an editor does.
@@ -45,8 +45,6 @@ if [ -z "$VAULT_DIR" ] || [ ! -d "$VAULT_DIR" ]; then
 fi
 ```
 
-The vault's URL-name (for the `obsidian://` URL scheme in Step 4.4) is the final path component — e.g. `$HOME/Second brain` → `Second brain`. URL-encode spaces as `%20`.
-
 ## Step 0 — Setup preflight (runs every `/watch` invocation, silent on success)
 
 **Python interpreter:** every `python3 ...` command in this skill is for macOS/Linux. On **Windows**, substitute `python` — the `python3` command on Windows is the Microsoft Store stub and will not run the script.
@@ -64,8 +62,8 @@ On non-zero exit, follow the table:
 | Exit | Meaning                                            | Action                                                    |
 | ---- | -------------------------------------------------- | --------------------------------------------------------- |
 | `2`  | Missing binaries (`ffmpeg` / `ffprobe` / `yt-dlp`) | Run installer                                             |
-| `3`  | No Whisper API key                                 | Run installer to scaffold `.env`, then ask user for a key |
-| `4`  | Both missing                                       | Run installer, then ask for a key                         |
+| `3`  | No Whisper API key                                 | Run installer, then hand the user the key step below      |
+| `4`  | Both missing                                       | Run installer, then hand the user the key step below      |
 
 The installer is idempotent — safe to re-run:
 
@@ -75,7 +73,30 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/setup.py"
 
 On macOS with Homebrew, it auto-installs `ffmpeg` and `yt-dlp`. On Linux/Windows, it prints the exact install commands for the user to run. It scaffolds `~/.config/watch/.env` with commented placeholders at `0600` perms, and writes `SETUP_COMPLETE=true` once deps + a key are in place so the next session knows this user has already been through the wizard.
 
-**If an API key is still missing after install:** use `AskUserQuestion` to ask the user whether they have a Groq API key (preferred — cheaper, faster) or an OpenAI key. Then write it into `~/.config/watch/.env` — set the matching `GROQ_API_KEY=...` or `OPENAI_API_KEY=...` line. If they don't want to set up Whisper, proceed with `--no-whisper` and tell them videos without native captions will come back frames-only.
+**If an API key is still missing after install:** the key must never pass through the chat — never ask for it with `AskUserQuestion`, never accept it pasted into a message, and never write it to a file yourself. On macOS, hand the user this one manual step and wait for them to say it is done. The scripts read the key back from the Keychain at run time (`scripts/keychain.py`), so nothing else needs configuring:
+
+> [!WARNING]
+> ⚠️ **Step 1 — Save your Groq key in the macOS Keychain**
+>
+> **What & why:** /watch needs a Groq key to transcribe videos that have no captions; this stores it in your Mac's Keychain, the password store macOS keeps locked for you, so it never appears in the chat or a file.
+>
+> **Where:** open the Terminal app, paste the command below and press return, then paste your key (from console.groq.com/keys) when asked and press return again. Nothing shows on screen while you paste the key — that is on purpose.
+>
+> **You'll know it worked when** you see `✅ Saved: your Groq key is in the macOS Keychain as groq-api-key`; if you see `❌ Not saved: …` instead, nothing was stored — copy the key again and rerun the command.
+>
+> **Do this** (the command right below this box):
+
+```zsh
+read -rs "PASTED_GROQ_API_KEY?Paste your Groq API key, then press return (nothing shows as you paste): "; echo; if [[ -n "$PASTED_GROQ_API_KEY" ]] && security add-generic-password -U -a "$USER" -s groq-api-key -w "$PASTED_GROQ_API_KEY" && [[ -n "$(security find-generic-password -a "$USER" -s groq-api-key -w 2>/dev/null)" ]]; then echo "✅ Saved: your Groq key is in the macOS Keychain as groq-api-key"; else echo "❌ Not saved: nothing usable was stored in the Keychain; copy the key again and rerun this"; fi; unset PASTED_GROQ_API_KEY
+```
+
+If the user only has an OpenAI key, hand them the same step with OpenAI in place of Groq (key from platform.openai.com/api-keys; success line names `openai-api-key`), using this command:
+
+```zsh
+read -rs "PASTED_OPENAI_API_KEY?Paste your OpenAI API key, then press return (nothing shows as you paste): "; echo; if [[ -n "$PASTED_OPENAI_API_KEY" ]] && security add-generic-password -U -a "$USER" -s openai-api-key -w "$PASTED_OPENAI_API_KEY" && [[ -n "$(security find-generic-password -a "$USER" -s openai-api-key -w 2>/dev/null)" ]]; then echo "✅ Saved: your OpenAI key is in the macOS Keychain as openai-api-key"; else echo "❌ Not saved: nothing usable was stored in the Keychain; copy the key again and rerun this"; fi; unset PASTED_OPENAI_API_KEY
+```
+
+After they confirm, re-run `python3 "${CLAUDE_SKILL_DIR}/scripts/setup.py" --check`; exit 0 means the key was found. On Linux or Windows there is no Keychain: tell the user to put the key on the `GROQ_API_KEY=` (or `OPENAI_API_KEY=`) line of `~/.config/watch/.env` themselves, in their own editor. If they don't want to set up Whisper, proceed with `--no-whisper` and tell them videos without native captions will come back frames-only.
 
 **Structured mode (optional):** `python3 "${CLAUDE_SKILL_DIR}/scripts/setup.py" --json` emits `{status, first_run, missing_binaries, whisper_backend, has_api_key, config_file, platform}` where `status` is one of `ready | needs_install | needs_key | needs_install_and_key`. Use this when you need to branch on specifics (e.g. "is this the user's very first run?" → `first_run: true`).
 
@@ -175,22 +196,16 @@ Then, **fill in the pending markers in `report.md` using the Edit tool**. Walk e
 
 The fully-filled `report.md` is what gets ingested at Step 4.5. Do not skip the fill — empty markers won't ingest cleanly.
 
-**Step 4.4 — Stage to the Obsidian vault and open in Obsidian (when a vault is detected).** After filling every marker, resolve `$VAULT_DIR` per the Configuration section. **If no vault is detected, skip this step** and emit `📄 Report (no vault detected): <workdir>/report.md` in chat instead.
+**Step 4.4 — Stage to the Obsidian vault and print where the report is (when a vault is detected).** After filling every marker, resolve `$VAULT_DIR` per the Configuration section. **If no vault is detected, skip this step** and emit `📄 Report (no vault detected): <workdir>/report.md` in chat instead.
 
 When `$VAULT_DIR` resolves:
 
 1. **Derive the slug now** (do not wait for Step 4.5). Take the video title from `report.md` frontmatter, slugify (lowercase, ASCII-only, hyphens, max 60 chars), append `-YYYY-MM-DD`. Example: `karpathy-claude-md-43k-installs-2026-05-24`.
 2. **Create the staging dir:** `mkdir -p "$VAULT_DIR/raw/watched/<slug>"`.
 3. **Copy `report.md` + every hero frame** (filenames in the report frontmatter under `hero_frames:`) into that dir. The report MUST live inside the vault for Obsidian to open it.
-4. **Open in Obsidian via URL scheme** (macOS). The vault URL-name is the final component of `$VAULT_DIR` with spaces URL-encoded as `%20`:
-   ```bash
-   VAULT_NAME=$(basename "$VAULT_DIR" | sed 's/ /%20/g')
-   open "obsidian://open?vault=${VAULT_NAME}&file=raw/watched/<slug>/report.md"
-   ```
-   The `file=` value is the path relative to the vault root, no leading slash. Don't ask permission — the user has already opted in by running /watch.
-5. **Echo the vault-relative path in chat** on its own line: `📄 Report (open in Obsidian): raw/watched/<slug>/report.md`. So if Obsidian was closed / the URL handler missed, the user can still navigate to it manually inside the vault.
+4. **Print where the report is, and open nothing.** Never run `open`, an `obsidian://` URL or any other command that launches or focuses an app — bringing a window forward interrupts whatever the user is doing. Print the saved location in chat on its own line, both the vault-relative path and the full path: `📄 Report saved in your vault: raw/watched/<slug>/report.md ($VAULT_DIR/raw/watched/<slug>/report.md)`. The user opens it when they choose.
 
-Rationale: the report is the leverage point of /watch. If the user reads everything in Obsidian, opening in Preview or VS Code defeats the purpose. Staging at 4.4 also means Step 4.5's "Yes / Stage" branches are no-ops on the copy step (the file is already in the vault); they only differ in whether the Ingest op runs.
+Rationale: the report is the leverage point of /watch, and the user reads everything in their vault, so the report is staged there rather than left in a temporary directory. Staging at 4.4 also means Step 4.5's "Yes / Stage" branches are no-ops on the copy step (the file is already in the vault); they only differ in whether the Ingest op runs.
 
 **Cleanup implication for Step 4.5:** if the user picks "No, drop it" at 4.5 AND a vault was staged at 4.4, ALSO `rm -rf "$VAULT_DIR/raw/watched/<slug>"` since we pre-staged. Do NOT drop the vault copy if they picked Yes or Stage.
 
@@ -236,11 +251,11 @@ The script gets a timestamped transcript in one of two ways:
    - **Groq** — `whisper-large-v3`. Preferred default: cheaper, faster. Get a key at console.groq.com/keys.
    - **OpenAI** — `whisper-1`. Fallback. Get a key at platform.openai.com/api-keys.
 
-Both keys live in `~/.config/watch/.env`. The script prefers Groq when both are set; override with `--whisper openai` to force OpenAI. Use `--no-whisper` to skip the fallback entirely.
+On macOS both keys live in the Keychain (services `groq-api-key` and `openai-api-key`, stored by the Step 0 command); elsewhere they live in `~/.config/watch/.env`. Each key is looked up in the environment first, then the Keychain, then the `.env` file. The script prefers Groq when both are set; override with `--whisper openai` to force OpenAI. Use `--no-whisper` to skip the fallback entirely.
 
 ## Failure modes and handling
 
-- **Setup preflight failed** → run `python3 "${CLAUDE_SKILL_DIR}/scripts/setup.py"` (auto-installs ffmpeg/yt-dlp via brew on macOS, scaffolds the `.env`). For API key, ask the user via `AskUserQuestion` and write it to `~/.config/watch/.env`.
+- **Setup preflight failed** → run `python3 "${CLAUDE_SKILL_DIR}/scripts/setup.py"` (auto-installs ffmpeg/yt-dlp via brew on macOS, scaffolds the `.env`). For the API key, hand the user the Keychain step in Step 0 — never collect the key in chat.
 - **No transcript available** → captions missing AND (no Whisper key OR Whisper API failed). Script prints a hint pointing to setup. Proceed frames-only and tell the user.
 - **Long video warning printed** → acknowledge it in your answer. Offer to re-run focused on a specific section via `--start`/`--end` rather than a sparse full-video scan.
 - **Download fails** → yt-dlp's error goes to stderr. If it's a login-required or region-locked video, tell the user plainly; do not keep retrying.
@@ -267,7 +282,8 @@ If you already watched a video this session and the user asks a follow-up, do **
 - Sends the extracted audio clip to Groq's Whisper API (`api.groq.com/openai/v1/audio/transcriptions`) when `GROQ_API_KEY` is set (preferred — cheaper, faster)
 - Sends the extracted audio clip to OpenAI's audio transcription API (`api.openai.com/v1/audio/transcriptions`) when `OPENAI_API_KEY` is set and Groq is not, or when `--whisper openai` is forced
 - Writes the downloaded video, frames, audio, and an intermediate transcript to a working directory under the system temp dir (or `--out-dir` if specified) so Claude can `Read` them
-- Reads / creates `~/.config/watch/.env` (mode `0600`) to store the Whisper API key(s) and a `SETUP_COMPLETE` marker. As a fallback, also reads `.env` in the current working directory
+- Reads the Whisper API key(s) from the macOS Keychain (services `groq-api-key` / `openai-api-key`) with `security find-generic-password`; the value is passed to the matching API and never printed
+- Reads / creates `~/.config/watch/.env` (mode `0600`) for a `SETUP_COMPLETE` marker and, on platforms without a Keychain, the Whisper API key(s). As a fallback, also reads `.env` in the current working directory
 - Reads `$VAULT_DIR/CLAUDE.md` at orchestration time (only when ingest is requested and the file exists) to follow that vault's Ingest operation definition
 - Writes a structured `report.md` plus copies of hero frames into `$VAULT_DIR/raw/watched/<slug>/` when a vault is detected at Step 4.4
 - When ingest is consented to: reads and writes pages under `$VAULT_DIR/wiki/` (entities, concepts, sources, index.md) and appends to `$VAULT_DIR/log.md` — following the actions defined by the vault's Ingest op (or a generic fallback if no `CLAUDE.md` is present)
@@ -278,10 +294,12 @@ If you already watched a video this session and the user asks a follow-up, do **
 - Does not access any platform account (no login, no session cookies, no posting)
 - Does not share API keys between providers (Groq key only goes to `api.groq.com`, OpenAI key only goes to `api.openai.com`)
 - Does not log, cache, or write API keys to stdout, stderr, or output files
-- Does not persist anything outside the working directory and `~/.config/watch/.env` (and Second Brain when ingest is consented to) — clean up the working directory when you're done (Step 5)
+- Does not collect API keys through the chat — the user stores them in the Keychain with the Step 0 command
+- Does not open, launch or focus any app — it prints where the report was saved
+- Does not persist anything outside the working directory, `~/.config/watch/.env` and the Keychain items the user stored (and Second Brain when ingest is consented to) — clean up the working directory when you're done (Step 5)
 - Does not write to the Second Brain without explicit user consent at the Step 4.5 prompt
 - Does not silently overwrite wiki claims — contradictions surface as WARN flags per the Ingest op contract
 
-**Bundled scripts:** `scripts/watch.py` (entry point), `scripts/download.py` (yt-dlp wrapper), `scripts/frames.py` (ffmpeg uniform + scene-change extraction + hero selection), `scripts/pacing.py` (editorial metrics), `scripts/hook.py` (0-10s microscope), `scripts/report.py` (structured report emitter), `scripts/transcribe.py` (caption selection + Whisper orchestration), `scripts/whisper.py` (Groq / OpenAI clients, supports word-level timestamps), `scripts/setup.py` (preflight + installer)
+**Bundled scripts:** `scripts/watch.py` (entry point), `scripts/download.py` (yt-dlp wrapper), `scripts/frames.py` (ffmpeg uniform + scene-change extraction + hero selection), `scripts/pacing.py` (editorial metrics), `scripts/hook.py` (0-10s microscope), `scripts/report.py` (structured report emitter), `scripts/transcribe.py` (caption selection + Whisper orchestration), `scripts/whisper.py` (Groq / OpenAI clients, supports word-level timestamps), `scripts/setup.py` (preflight + installer), `scripts/keychain.py` (macOS Keychain key lookup)
 
 Review scripts before first use to verify behavior.

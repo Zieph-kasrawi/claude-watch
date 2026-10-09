@@ -15,6 +15,8 @@ Design:
   through a successful installer run at least once.
 - Never sudo. On macOS, auto-install via brew. Elsewhere, print exact commands.
 - Never write an API key to disk automatically — only scaffold placeholders.
+- On macOS the keys live in the Keychain (services groq-api-key and
+  openai-api-key); the .env file is the fallback for other platforms.
 """
 from __future__ import annotations
 
@@ -25,6 +27,9 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from keychain import read_api_key_from_keychain  # noqa: E402
 
 
 REQUIRED_BINARIES = ["ffmpeg", "ffprobe", "yt-dlp"]
@@ -40,6 +45,9 @@ ENV_TEMPLATE = """# /watch API configuration
 #
 # Get a Groq key:  https://console.groq.com/keys
 # Get an OpenAI key:  https://platform.openai.com/api-keys
+#
+# On macOS, store keys in the Keychain instead of this file (services
+# groq-api-key and openai-api-key) — see SKILL.md Step 0.
 #
 # Leave both blank to disable Whisper — /watch will still work, but videos
 # without native captions will come back frames-only.
@@ -75,6 +83,9 @@ def _read_env_key(name: str) -> str | None:
     value = os.environ.get(name)
     if value and value.strip():
         return value.strip()
+    keychain_value = read_api_key_from_keychain(name)
+    if keychain_value:
+        return keychain_value
     if not CONFIG_FILE.exists():
         return None
     _check_file_permissions(CONFIG_FILE)
@@ -304,9 +315,14 @@ def cmd_install() -> int:
     print("")
     print("[setup] one step left: add a Whisper API key.")
     print("")
-    print(f"  Edit {CONFIG_FILE} and set either:")
-    print("    GROQ_API_KEY=...    (preferred — cheaper, faster; get one at console.groq.com/keys)")
-    print("    OPENAI_API_KEY=...  (fallback; get one at platform.openai.com/api-keys)")
+    if platform.system() == "Darwin":
+        print("  Store one in the macOS Keychain (SKILL.md Step 0 has the paste command):")
+        print("    service groq-api-key    (preferred — cheaper, faster; get one at console.groq.com/keys)")
+        print("    service openai-api-key  (fallback; get one at platform.openai.com/api-keys)")
+    else:
+        print(f"  Edit {CONFIG_FILE} and set either:")
+        print("    GROQ_API_KEY=...    (preferred — cheaper, faster; get one at console.groq.com/keys)")
+        print("    OPENAI_API_KEY=...  (fallback; get one at platform.openai.com/api-keys)")
     print("")
     print("  Without a key, /watch still works but videos without captions come back frames-only.")
     return 3

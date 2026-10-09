@@ -24,6 +24,9 @@ import uuid
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from keychain import read_api_key_from_keychain  # noqa: E402
+
 
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
 GROQ_MODEL = "whisper-large-v3"
@@ -35,7 +38,9 @@ OPENAI_MODEL = "whisper-1"
 def load_api_key(preferred: str | None = None) -> tuple[str, str] | tuple[None, None]:
     """Return (backend, api_key). Prefers Groq, falls back to OpenAI.
 
-    If `preferred` is "groq" or "openai", only that backend's key is considered.
+    Each key is looked up in the environment, then the macOS Keychain, then
+    the `.env` files. If `preferred` is "groq" or "openai", only that
+    backend's key is considered.
     """
     def _from_env(name: str) -> str | None:
         value = os.environ.get(name)
@@ -70,7 +75,7 @@ def load_api_key(preferred: str | None = None) -> tuple[str, str] | tuple[None, 
         candidates = tuple(c for c in candidates if c[1] == preferred)
 
     for key_name, backend in candidates:
-        value = _from_env(key_name)
+        value = _from_env(key_name) or read_api_key_from_keychain(key_name)
         if not value:
             for candidate in dotenv_paths:
                 value = _from_dotenv(candidate, key_name)
@@ -290,8 +295,9 @@ def transcribe_video(
     if not backend or not api_key:
         setup_py = Path(__file__).resolve().parent / "setup.py"
         raise SystemExit(
-            "No Whisper API key available. Set GROQ_API_KEY (preferred) or OPENAI_API_KEY "
-            "in the environment or in ~/.config/watch/.env. "
+            "No Whisper API key available. Store GROQ_API_KEY (preferred) or OPENAI_API_KEY "
+            "in the macOS Keychain (services groq-api-key / openai-api-key), the environment, "
+            "or ~/.config/watch/.env. "
             f"Run `python3 {setup_py}` to configure."
         )
 

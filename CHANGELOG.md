@@ -2,6 +2,19 @@
 
 All notable changes to `/watch` are documented here.
 
+## [Unreleased]
+
+### Security
+- On macOS, Whisper API keys are read from the Keychain (services `groq-api-key` and `openai-api-key`) by the new `scripts/keychain.py`, checked after the environment and before `~/.config/watch/.env`, in `whisper.py`, `setup.py` and the SessionStart hook.
+- `SKILL.md` no longer collects API keys through `AskUserQuestion` or writes them to `.env`: it hands the user a silent `read -rs` paste command that stores the key in the Keychain and proves it landed.
+
+### Changed
+- Step 4.4 no longer runs `open obsidian://…`; it prints where the report was saved and never launches or focuses an app.
+- The "What v2 does differently" heading now says what the section covers: "What each watch produces beyond frames and a transcript".
+
+### Added
+- 4 unit tests for the Keychain lookup in `scripts/tests/test_keychain.py`.
+
 ## [0.2.0] — 2026-05-25
 
 Based on [bradautomates/claude-video](https://github.com/bradautomates/claude-video) v0.1.3 by Bradley Bonanno (MIT). Its pipeline (yt-dlp + ffmpeg + Whisper) is preserved; everything below is additive.
