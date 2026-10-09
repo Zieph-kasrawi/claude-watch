@@ -1,8 +1,8 @@
 ---
 name: watch
-description: Watch a video (URL or local path) and extract everything in it worth keeping — full timestamped transcript, key moments, the ideas and claims it makes, entities, quotable lines, and scene frames Claude actually looks at. Use whenever the founder shares a video and wants to learn from it, research it, summarize it, check what it claims, or turn it into notes — and for reviewing a video's own craft, where it also profiles pacing and the first ten seconds. Produces a structured report.md and offers to ingest it into the Obsidian vault, tied to why it was watched.
+description: Watch a video (URL or local path) and extract everything in it worth keeping — full timestamped transcript, key moments, the ideas and claims it makes, entities, quotable lines, and scene frames Claude actually looks at. Use whenever the founder shares a video and wants to learn from it, research it, summarize it, check what it claims, or turn it into notes — and for reviewing a video's own craft, where it also profiles pacing and the first ten seconds. Produces a structured report.md and offers to file it in the research library as research, tied to why it was watched.
 argument-hint: "<video-url-or-path> [why you're watching it]"
-allowed-tools: Bash, Read, AskUserQuestion
+allowed-tools: Bash, Read, Edit, Write, AskUserQuestion
 homepage: https://github.com/taoufik123-collab/claude-watch
 repository: https://github.com/taoufik123-collab/claude-watch
 author: taoufik
@@ -12,38 +12,34 @@ user-invocable: true
 
 # /watch — Claude watches a video
 
-You don't have a video input; this skill gives you one. A Python script downloads the video, extracts frames as JPEGs (one per detected shot via scene-change), gets a timestamped transcript (native captions first, then Whisper API as fallback), runs editorial pacing metrics, and microscopes the first 10 seconds at higher density. You then `Read` each frame path to see the images, combine them with the transcript to answer the user, fill the structured `report.md`, and offer to ingest the analysis into Taoufik's Second Brain.
+You don't have a video input; this skill gives you one. A Python script downloads the video, extracts frames as JPEGs (one per detected shot via scene-change), gets a timestamped transcript (native captions first, then Whisper API as fallback), runs editorial pacing metrics, and microscopes the first 10 seconds at higher density. You then `Read` each frame path to see the images, combine them with the transcript to answer the user, fill the structured `report.md`, and offer to file the analysis in the research library.
 
 ## What each watch produces beyond frames and a transcript
 
 - **Scene-change frame sampling** — one frame per detected shot instead of uniform ticks. Cuts the frame budget on long videos while capturing every transition.
 - **Editorial pacing metrics** — cuts/min, mean shot length, motion (when available). Lets you reason about pacing the way an editor does.
 - **Hook microscope** — first 10s auto-runs at 2 fps + word-level Whisper. The single most leveraged 10 seconds of any video deserves dense treatment.
-- **Structured `report.md`** — every watch emits an ingest-shaped report at `<workdir>/report.md` with TL;DR, key moments, hook breakdown, editorial profile, quotable moments, entities, concepts, and transcript. Narrative sections are emitted as `<!-- pending Claude fill: ... -->` markers — you fill them in before offering ingest.
-- **Step 4.5 — Ingest gate** — after answering the user, you ask once: "Want to ingest this into your Obsidian vault?" If yes, and a vault is detected, you read `$VAULT_DIR/CLAUDE.md` (if it exists) and run that vault's Ingest op against the report.
+- **Structured `report.md`** — every watch emits an ingest-shaped report at `<workdir>/report.md` with TL;DR, key moments, hook breakdown, editorial profile, quotable moments, entities, concepts, and transcript. Narrative sections are emitted as `<!-- pending Claude fill: ... -->` markers — you fill them in before offering to save.
+- **Step 4.4 — Save gate** — after answering the user, you ask once: "Save this to the research library?" Only on yes do you file it, as a research note — never as adopted practice — following the library wiki's own `SCHEMA.md`.
 
 None of the above add new dependencies — pure ffmpeg + stdlib + the existing Whisper backend.
 
-## Configuration — finding the user's Obsidian vault
+## Configuration — where reports are saved
 
-Steps 4.4 and 4.5 stage the report inside an Obsidian vault so the user can read it where they read everything else. Resolve the vault directory in this order — first hit wins, and the result is what `$VAULT_DIR` refers to everywhere below:
+Watched videos are filed in a **research library**: material that is a rough guide and a consultant, not established or adopted practice. It is kept apart from any memory of established facts, so /watch never writes to a notes vault, a memory store or a `CLAUDE.md`.
 
-1. **`$WATCH_VAULT_DIR` env var** — if set and the path exists, use it. This is the user-controlled override.
-2. **`~/Second brain/`** — if it exists as a directory.
-3. **`~/Documents/Obsidian/`** — if it exists as a directory.
-4. **`~/Obsidian/`** — if it exists as a directory.
-5. **None found** — skip Steps 4.4 and 4.5 entirely. Print one line in chat so the user knows what happened: `📄 Report (no vault detected): <workdir>/report.md`. Suggest they set `WATCH_VAULT_DIR` if they want auto-ingest.
+The library's location is one setting, `WATCH_RESEARCH_LIBRARY_DIRECTORY`, read from the environment and then from `~/.config/watch/.env`. Whoever owns the library repoints that one value; nothing else in this skill names a path. The directory holds two layers:
 
-A quick way to resolve it in bash inside the skill:
+- `wiki/` — the compiled wiki. Its `wiki/SCHEMA.md` governs every page, link and log entry. Read it before writing anything there.
+- `raw/transcripts/` — immutable raw transcripts, one file per video.
+
+Resolve it with:
 
 ```bash
-VAULT_DIR="${WATCH_VAULT_DIR:-}"
-if [ -z "$VAULT_DIR" ] || [ ! -d "$VAULT_DIR" ]; then
-  for candidate in "$HOME/Second brain" "$HOME/Documents/Obsidian" "$HOME/Obsidian"; do
-    if [ -d "$candidate" ]; then VAULT_DIR="$candidate"; break; fi
-  done
-fi
+RESEARCH_LIBRARY_DIRECTORY="$(python3 "${CLAUDE_SKILL_DIR}/scripts/research_library.py")"
 ```
+
+On exit 1 (the setting is unset, or the directory has no `wiki/SCHEMA.md`) skip Step 4.4, save nothing, and print one line in chat: `📄 Report (no research library configured): <workdir>/report.md`. Never fall back to another location.
 
 ## Step 0 — Setup preflight (runs every `/watch` invocation, silent on success)
 
@@ -191,56 +187,40 @@ Then, **fill in the pending markers in `report.md` using the Edit tool**. Walk e
 - **Hook microscope interpretation** — frame-by-frame: visual change × what's said; identify the hook pattern (question, contrarian claim, in-medias-res, demo-first, etc.)
 - **Editorial profile fingerprint** — one-line style summary inferred from pacing numbers + hero frames
 - **Quotable moments** — top 3-5 punchy, standalone lines from the transcript
-- **Entities mentioned** — people, companies, tools, places — formatted to match wiki/entities/ slugs (kebab-case, lowercase). Use `[[wikilink]]` style.
+- **Entities mentioned** — people, companies, tools, places — as kebab-case, lowercase slugs matching the library wiki's `tools/` and `techniques/` pages, linked bundle-relative (`/tools/<slug>.md`).
 - **Concepts surfaced** — frameworks, mental models, named patterns — short gist each
 
-The fully-filled `report.md` is what gets ingested at Step 4.5. Do not skip the fill — empty markers won't ingest cleanly.
+The fully-filled `report.md` is what Step 4.4 files. Do not skip the fill — empty markers produce a sparse, wrong source page.
 
-**Step 4.4 — Stage to the Obsidian vault and print where the report is (when a vault is detected).** After filling every marker, resolve `$VAULT_DIR` per the Configuration section. **If no vault is detected, skip this step** and emit `📄 Report (no vault detected): <workdir>/report.md` in chat instead.
+**Step 4.4 — Offer to save it to the research library, and write only on yes.** Resolve `RESEARCH_LIBRARY_DIRECTORY` per the Configuration section; if none is configured, print the no-library line and go to Step 5. Otherwise use `AskUserQuestion` once (skip it only if the user said "don't save" before /watch ran), before anything is written:
 
-When `$VAULT_DIR` resolves:
-
-1. **Derive the slug now** (do not wait for Step 4.5). Take the video title from `report.md` frontmatter, slugify (lowercase, ASCII-only, hyphens, max 60 chars), append `-YYYY-MM-DD`. Example: `karpathy-claude-md-43k-installs-2026-05-24`.
-2. **Create the staging dir:** `mkdir -p "$VAULT_DIR/raw/watched/<slug>"`.
-3. **Copy `report.md` + every hero frame** (filenames in the report frontmatter under `hero_frames:`) into that dir. The report lives inside the vault so the user can read it there alongside everything else.
-4. **Print where the report is, and open nothing.** Never run `open`, an `obsidian://` URL or any other command that launches or focuses an app — bringing a window forward interrupts whatever the user is doing. Print the saved location in chat on its own line, both the vault-relative path and the full path: `📄 Report saved in your vault: raw/watched/<slug>/report.md ($VAULT_DIR/raw/watched/<slug>/report.md)`. The user opens it when they choose.
-
-Rationale: the report is the leverage point of /watch, and the user reads everything in their vault, so the report is staged there rather than left in a temporary directory. Staging at 4.4 also means Step 4.5's "Yes / Stage" branches are no-ops on the copy step (the file is already in the vault); they only differ in whether the Ingest op runs.
-
-**Cleanup implication for Step 4.5:** if the user picks "No, drop it" at 4.5 AND a vault was staged at 4.4, ALSO `rm -rf "$VAULT_DIR/raw/watched/<slug>"` since we pre-staged. Do NOT drop the vault copy if they picked Yes or Stage.
-
-**Step 4.5 — Offer ingest into the Obsidian vault.** **Skip this step entirely if no vault was detected at Step 4.4.** Otherwise use `AskUserQuestion` once, with these options (do NOT skip if a vault was found unless the user explicitly said "don't ingest" before /watch ran):
-
-> **Question:** "Want to ingest this into your Obsidian vault?"
+> **Question:** "Save this to the research library? It is filed as research — a rough guide, not adopted practice."
 >
 > - **Yes — same angle** ("<intent>")
 > - **Yes — different angle** (user specifies in the notes field)
-> - **Stage to `raw/watched/` for later**
-> - **No, drop it**
+> - **No, don't save it**
 
-Routing based on response:
+**On "No":** write nothing and go to Step 5.
 
-**A. Yes (same or different angle):**
+**On either "Yes":** `WIKI` below means `$RESEARCH_LIBRARY_DIRECTORY/wiki`.
 
-1. Derive the slug: take the video title from `report.md` frontmatter, slugify (lowercase, ASCII-only, hyphens, max 60 chars), append `-YYYY-MM-DD`. Example: `me-at-the-zoo-2026-05-24`.
-2. Confirm the staging dir exists at `$VAULT_DIR/raw/watched/<slug>/` (Step 4.4 already created it).
-3. The report + hero frames are already copied there from Step 4.4.
-4. **If "different angle":** Re-edit the TL;DR + Entities + Concepts sections of the copied report to reflect the new angle the user specified, before running ingest.
-5. **If `$VAULT_DIR/CLAUDE.md` exists:** Read it to refresh the Ingest op definition — that file is authoritative; this skill must not duplicate its steps. Execute the Ingest op against `raw/watched/<slug>/report.md` exactly as `$VAULT_DIR/CLAUDE.md` defines it.
-6. **If no `$VAULT_DIR/CLAUDE.md` exists:** Run a generic ingest — read the report, identify entities + concepts, append a one-line entry to `$VAULT_DIR/log.md` (create if missing), and tell the user the report is staged at `raw/watched/<slug>/report.md` and they can wire up an Ingest op of their own.
-7. Report back to the user in chat: which entity pages were touched (if any), the path to the staged report, and the `log.md` entry written.
+1. **Read `$WIKI/SCHEMA.md` in full.** It is authoritative for frontmatter, body sections, links and the log format; where it and this step differ, it wins. Then read the newest page in `$WIKI/sources/` whose name starts with `ext-`, and the last few entries of `$WIKI/log.md`, and match them.
+2. **If "different angle":** re-edit the TL;DR, Entities and Concepts sections of `report.md` to the new angle before filing.
+3. **Number it.** A video the user brought, outside the numbered playlist, is filed with the `ext-` prefix: `NN` is the highest existing `ext-NN` in `$WIKI/sources/` plus one, two digits. `<slug>` is the video title, lowercase, ASCII-only, hyphenated, at most 60 characters. If a source page already records this `video_id`, stop and tell the user where it is instead of filing a duplicate.
+4. **Write the raw transcript** to `$RESEARCH_LIBRARY_DIRECTORY/raw/transcripts/ext-NN-<video_id>.md`, in the same shape as the files already there: the title as a heading, then channel, duration, upload date, URL and word count as a bullet list, a `---` rule, then the transcript text verbatim from `report.md`. Never edit it afterwards. If the report has no transcript, write no raw file and say so on the source page.
+5. **Write the source page** `$WIKI/sources/ext-NN-<slug>.md` as a `Video Source` per `SCHEMA.md`, compiled from the filled report — not a copy of it. Add to the frontmatter:
+   - `tags` that include `external-source`, `ad-hoc` and `research-not-adopted`;
+   - `watched_because:` the user's intent (or the different angle), in their words;
+   - `standing: research — not established or adopted practice`.
 
-**B. Stage to `raw/watched/` for later:**
+   Directly under the frontmatter, before `# Thesis`, put this banner on its own line: `> **Research note filed by /watch.** Every claim here is the speaker's or this analysis's, not established or adopted practice; treat it as a rough guide.` Use the schema's body sections (`# Thesis`, `# Techniques & claims`, `# Adopt/reject signals`, `# Citations`); write adopt/reject signals as suggestions for the user to weigh, never as decisions. Describe what the frames showed in words; copy no images.
+6. **Index and log it.** Add one line for the page under `# External / ad-hoc sources (not playlist)` in `$WIKI/sources/index.md`, matching the existing lines, and append one `ingest` entry for it to `$WIKI/log.md` in the format its newest entries use.
+7. **Stop there.** This step files only the video's own pages. The pages shared across videos (`tools/`, `techniques/`, `analyses/`, the root `index.md`) are left to whoever owns the library, so do not create or edit them. Links from the source page to tool or technique pages that do not exist yet are allowed; they mark pages the library's owner may write later.
+8. **Do not commit, and open nothing.** Never run `open` or any command that launches or focuses an app. Print in chat, one per line, every file written, as full paths, starting with `📄 Saved to the research library: <full path of the source page>`. If the library sits inside a git repository, say so; whoever commits follows that repository's own rules, using exactly those paths.
 
-1. The staging from Step 4.4 already did the file copy.
-2. Do NOT touch the wiki. Do NOT append to `log.md`.
-3. Tell the user in chat: "Staged at `$(basename $VAULT_DIR)/raw/watched/<slug>/`. Run an Ingest op against it when you're ready."
+The "different angle" path lets the user watch a video for one reason and, on the way out, file it under the reason it turned out to be useful for.
 
-**C. No, drop it:** proceed to Step 5 (cleanup) — and per the cleanup-implication note in Step 4.4, `rm -rf "$VAULT_DIR/raw/watched/<slug>"` to undo the pre-staging.
-
-The "different angle" path is what makes /watch truly plug-and-play — the user can watch a video for one reason, then on the way out decide it's actually more useful for a different concept, and the resulting wiki entry reframes accordingly.
-
-**Step 5 — clean up.** The script prints a working directory at the end. If you ingested (Step 4.5 path A), the hero frames + report.md are already copied to Second Brain — you can `rm -rf` the original workdir. If you staged (path B), same — the workdir copy is no longer needed. If the user picked "no, drop it" (path C) and isn't going to ask follow-ups, delete with `rm -rf <dir>`. If they might ask follow-ups, leave it in place.
+**Step 5 — clean up.** The script prints a working directory at the end. Whether or not the report was saved, the working directory holds only working copies: if the user isn't going to ask follow-ups, delete it with `rm -rf <dir>`; if they might, leave it in place.
 
 ## Transcription
 
@@ -260,8 +240,8 @@ On macOS both keys live in the Keychain (services `groq-api-key` and `openai-api
 - **Long video warning printed** → acknowledge it in your answer. Offer to re-run focused on a specific section via `--start`/`--end` rather than a sparse full-video scan.
 - **Download fails** → yt-dlp's error goes to stderr. If it's a login-required or region-locked video, tell the user plainly; do not keep retrying.
 - **Whisper request fails** → the error is printed to stderr (likely: invalid key, rate limit, or 25 MB upload limit on a very long video). The report will say "none available" for transcript. You can retry with `--whisper openai` if Groq failed (or vice versa).
-- **Report has unfilled `<!-- pending Claude fill: ... -->` markers** → you skipped Step 4. Go back, read the report, fill every marker via Edit, then offer ingest. Never ingest a half-filled report — the Second Brain Ingest op will produce sparse/wrong entity pages.
-- **Ingest fails partway** → do not roll back. The Second Brain Ingest op is idempotent on re-run (it updates existing pages rather than duplicating). Tell the user what failed, leave the staged artifact in `raw/watched/<slug>/`, and they can re-run by saying "ingest the staged report at `<slug>`".
+- **Report has unfilled `<!-- pending Claude fill: ... -->` markers** → you skipped Step 4. Go back, read the report, fill every marker via Edit, then offer to save. Never file a half-filled report — it produces a sparse, wrong source page.
+- **Saving fails partway** → do not roll back and do not delete anything. Tell the user which of the Step 4.4 files were written and which were not, with full paths, and leave the working directory in place so the save can be finished from it.
 
 ## Token efficiency
 
@@ -284,9 +264,8 @@ If you already watched a video this session and the user asks a follow-up, do **
 - Writes the downloaded video, frames, audio, and an intermediate transcript to a working directory under the system temp dir (or `--out-dir` if specified) so Claude can `Read` them
 - Reads the Whisper API key(s) from the macOS Keychain (services `groq-api-key` / `openai-api-key`) with `security find-generic-password`; the value is passed to the matching API and never printed
 - Reads / creates `~/.config/watch/.env` (mode `0600`) for a `SETUP_COMPLETE` marker and, on platforms without a Keychain, the Whisper API key(s). As a fallback, also reads `.env` in the current working directory
-- Reads `$VAULT_DIR/CLAUDE.md` at orchestration time (only when ingest is requested and the file exists) to follow that vault's Ingest operation definition
-- Writes a structured `report.md` plus copies of hero frames into `$VAULT_DIR/raw/watched/<slug>/` when a vault is detected at Step 4.4
-- When ingest is consented to: reads and writes pages under `$VAULT_DIR/wiki/` (entities, concepts, sources, index.md) and appends to `$VAULT_DIR/log.md` — following the actions defined by the vault's Ingest op (or a generic fallback if no `CLAUDE.md` is present)
+- Reads the `WATCH_RESEARCH_LIBRARY_DIRECTORY` setting and, when saving is consented to, that library's `wiki/SCHEMA.md`
+- Only after the user says yes at Step 4.4: writes one raw transcript under `raw/transcripts/`, one source page under `wiki/sources/`, one line in `wiki/sources/index.md` and one entry in `wiki/log.md` inside the research library
 
 **What this skill does NOT do:**
 
@@ -296,10 +275,11 @@ If you already watched a video this session and the user asks a follow-up, do **
 - Does not log, cache, or write API keys to stdout, stderr, or output files
 - Does not collect API keys through the chat — the user stores them in the Keychain with the Step 0 command
 - Does not open, launch or focus any app — it prints where the report was saved
-- Does not persist anything outside the working directory, `~/.config/watch/.env` and the Keychain items the user stored (and Second Brain when ingest is consented to) — clean up the working directory when you're done (Step 5)
-- Does not write to the Second Brain without explicit user consent at the Step 4.5 prompt
-- Does not silently overwrite wiki claims — contradictions surface as WARN flags per the Ingest op contract
+- Does not persist anything outside the working directory, `~/.config/watch/.env`, the Keychain items the user stored, and the research library files listed above — clean up the working directory when you're done (Step 5)
+- Does not write to the research library without explicit user consent at the Step 4.4 prompt, and never writes to a notes vault, a memory store or any `CLAUDE.md`
+- Does not copy frames or any other image into the research library
+- Does not commit, and does not edit the library's `tools/`, `techniques/`, `analyses/` or root `index.md` pages
 
-**Bundled scripts:** `scripts/watch.py` (entry point), `scripts/download.py` (yt-dlp wrapper), `scripts/frames.py` (ffmpeg uniform + scene-change extraction + hero selection), `scripts/pacing.py` (editorial metrics), `scripts/hook.py` (0-10s microscope), `scripts/report.py` (structured report emitter), `scripts/transcribe.py` (caption selection + Whisper orchestration), `scripts/whisper.py` (Groq / OpenAI clients, supports word-level timestamps), `scripts/setup.py` (preflight + installer), `scripts/keychain.py` (macOS Keychain key lookup)
+**Bundled scripts:** `scripts/watch.py` (entry point), `scripts/download.py` (yt-dlp wrapper), `scripts/frames.py` (ffmpeg uniform + scene-change extraction + hero selection), `scripts/pacing.py` (editorial metrics), `scripts/hook.py` (0-10s microscope), `scripts/report.py` (structured report emitter), `scripts/transcribe.py` (caption selection + Whisper orchestration), `scripts/whisper.py` (Groq / OpenAI clients, supports word-level timestamps), `scripts/setup.py` (preflight + installer), `scripts/keychain.py` (macOS Keychain key lookup), `scripts/research_library.py` (resolves the research library setting)
 
 Review scripts before first use to verify behavior.

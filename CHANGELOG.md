@@ -9,11 +9,14 @@ All notable changes to `/watch` are documented here.
 - `SKILL.md` no longer collects API keys through `AskUserQuestion` or writes them to `.env`: it hands the user a silent `read -rs` paste command that stores the key in the Keychain and proves it landed.
 
 ### Changed
+- Reports are saved to a research library instead of an Obsidian vault. The location is one setting, `WATCH_RESEARCH_LIBRARY_DIRECTORY`, resolved by the new `scripts/research_library.py`; `WATCH_VAULT_DIR` and the `~/Second brain/`, `~/Documents/Obsidian/`, `~/Obsidian/` auto-detection are removed, and an unset or invalid setting saves nothing.
+- Step 4.4 now asks before writing anything (the old flow pre-staged into the vault, then deleted it on "no"). On yes it follows the library's `wiki/SCHEMA.md`: a raw transcript, an `ext-NN` source page marked as research and not adopted practice, an index line and a log entry. It copies no frames, edits no cross-cutting wiki pages and does not commit. The old Step 4.5 and its "stage for later" option are gone.
 - Step 4.4 no longer runs `open obsidian://…`; it prints where the report was saved and never launches or focuses an app.
 - The "What v2 does differently" heading now says what the section covers: "What each watch produces beyond frames and a transcript".
 
 ### Added
 - 4 unit tests for the Keychain lookup in `scripts/tests/test_keychain.py`.
+- 5 unit tests for the research library setting in `scripts/tests/test_research_library.py`.
 
 ## [0.2.0] — 2026-05-25
 

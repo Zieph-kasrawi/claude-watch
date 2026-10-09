@@ -2,7 +2,7 @@
 
 **Give Claude the ability to watch any video.**
 
-> Paste a URL or a local file and Claude *watches* it — **scene-change frame extraction** (one frame per cut instead of every-N-seconds), a **0-10s hook microscope** (dense frames + word-level Whisper on the opening, where every video earns or loses your attention), and **optional Obsidian auto-save** so a watched video becomes a connected wiki entry without copy-paste.
+> Paste a URL or a local file and Claude *watches* it — **scene-change frame extraction** (one frame per cut instead of every-N-seconds), a **0-10s hook microscope** (dense frames + word-level Whisper on the opening, where every video earns or loses your attention), and an **optional save to a research library** that files a watched video as a research note in a wiki, only when you say yes.
 
 Claude Code:
 ```
@@ -17,14 +17,14 @@ Codex / generic skills:
 git clone https://github.com/taoufik123-collab/claude-watch.git ~/.codex/skills/watch
 ```
 
-Zero config to start — `yt-dlp` and `ffmpeg` install on first run via `brew` on macOS (Linux/Windows print exact commands). Captions cover most public videos for free. Whisper API key is only needed when a video has no captions. Set `$WATCH_VAULT_DIR` to point at your Obsidian vault for auto-save, or leave it unset and the skill skips the ingest step quietly.
+Zero config to start — `yt-dlp` and `ffmpeg` install on first run via `brew` on macOS (Linux/Windows print exact commands). Captions cover most public videos for free. Whisper API key is only needed when a video has no captions. Set `WATCH_RESEARCH_LIBRARY_DIRECTORY` to a research library (a directory with `wiki/SCHEMA.md` and `raw/transcripts/`) to enable saving, or leave it unset and the skill saves nothing.
 
 ## What's inside
 
 - **Scene-change frame extraction** — `scripts/frames.py` grabs one frame per detected shot via ffmpeg's `select=gt(scene,...)`, not a uniform tick every N seconds. Token cost stays flat on long videos because the frame count is bounded by the number of cuts, not the duration.
 - **0-10s hook microscope** — `scripts/hook.py` runs a denser 2 fps pass on the opening 10 seconds plus a word-level Whisper transcript, so the report tells you what was on screen *as each word landed*. The first 10 seconds is where every video either earns your attention or loses it.
-- **Structured `report.md` with Claude-fill markers** — `scripts/report.py` emits a fixed-schema report (TL;DR, key moments, hook breakdown, editorial profile, quotable moments, entities, concepts, transcript) where narrative sections are explicit `<!-- pending Claude fill: ... -->` markers. Claude has a job-list to walk before ingest, not a blank doc.
-- **Optional Obsidian auto-save** — Step 4.4 stages the report into `$VAULT_DIR/raw/watched/<slug>/` and prints where it was saved; it never opens or focuses an app. Step 4.5 offers ingest into the vault's wiki. Both steps skip cleanly when no vault is detected. Vault path is resolved from `$WATCH_VAULT_DIR` or auto-detected from `~/Second brain/`, `~/Documents/Obsidian/`, `~/Obsidian/`.
+- **Structured `report.md` with Claude-fill markers** — `scripts/report.py` emits a fixed-schema report (TL;DR, key moments, hook breakdown, editorial profile, quotable moments, entities, concepts, transcript) where narrative sections are explicit `<!-- pending Claude fill: ... -->` markers. Claude has a job-list to walk before saving, not a blank doc.
+- **Optional save to a research library** — Step 4.4 asks first and writes nothing unless you say yes. On yes it files the video the way the library's own `wiki/SCHEMA.md` says: a raw transcript, one source page marked as research rather than adopted practice, an index line and a log entry. It copies no images, commits nothing and never opens or focuses an app. The location is one setting, `WATCH_RESEARCH_LIBRARY_DIRECTORY`, read from the environment or `~/.config/watch/.env`; with it unset the step is skipped.
 
 The core pipeline — yt-dlp download, ffmpeg frames, Groq/OpenAI Whisper backends, the `--start`/`--end` focused mode, the SessionStart hook, the multi-surface install — comes from the original `claude-video` project and works unchanged (see [Credits](#credits)).
 
@@ -86,7 +86,7 @@ When the user names a moment ("around 2:30", "the last 30 seconds", "from 0:45 t
 | **claude.ai** (web) | [Download `watch.skill`](https://github.com/taoufik123-collab/claude-watch/releases/latest) → Settings → Capabilities → Skills → `+` |
 | **Codex** | `git clone https://github.com/taoufik123-collab/claude-watch.git ~/.codex/skills/watch` |
 | **Manual / dev** | `git clone https://github.com/taoufik123-collab/claude-watch.git ~/.claude/skills/watch` |
-| **Configuration** | Optional: `export WATCH_VAULT_DIR=/path/to/your/obsidian/vault` to enable auto-save. Auto-detects `~/Second brain/`, `~/Documents/Obsidian/`, `~/Obsidian/`. |
+| **Configuration** | Optional: add `WATCH_RESEARCH_LIBRARY_DIRECTORY=/path/to/research` to `~/.config/watch/.env` to enable saving. Nothing is auto-detected. |
 
 ### Claude Code
 
@@ -203,7 +203,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Credits
 
-`/watch` is built on **[claude-video](https://github.com/bradautomates/claude-video)** by **[Bradley Bonanno](https://github.com/bradautomates)**. The original `/watch` skill — the yt-dlp download, the ffmpeg pipeline, the Groq/OpenAI Whisper backends, the install flow, and the SessionStart hook — is his work, released under the MIT license. This repo extends it with scene-change frame extraction, the 0-10s hook microscope, the structured `report.md`, and Obsidian auto-save.
+`/watch` is built on **[claude-video](https://github.com/bradautomates/claude-video)** by **[Bradley Bonanno](https://github.com/bradautomates)**. The original `/watch` skill — the yt-dlp download, the ffmpeg pipeline, the Groq/OpenAI Whisper backends, the install flow, and the SessionStart hook — is his work, released under the MIT license. This repo extends it with scene-change frame extraction, the 0-10s hook microscope, the structured `report.md`, and the research-library save.
 
 Original author and copyright holder: **Bradley Bonanno** (see [LICENSE](LICENSE)). Contributors are listed in [AUTHORS.md](AUTHORS.md).
 
