@@ -200,7 +200,7 @@ The fully-filled `report.md` is what Step 4.4 files. Do not skip the fill — em
 > - **Yes — different angle** (user specifies in the notes field)
 > - **No, don't save it**
 
-**On "No":** write nothing and go to Step 5.
+**On "No":** write nothing and go to Step 5. When no person can answer — a headless run, or /watch used inside another agent or workflow — treat it as "No": save nothing and leave filing to whoever called /watch.
 
 **On either "Yes":** `WIKI` below means `$RESEARCH_LIBRARY_DIRECTORY/wiki`.
 
