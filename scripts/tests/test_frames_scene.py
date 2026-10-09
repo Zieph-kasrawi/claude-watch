@@ -5,10 +5,12 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
+import frames  # noqa: E402
 from frames import extract_scene_change, extract  # noqa: E402
 
 
@@ -68,6 +70,28 @@ class TestSceneChange(unittest.TestCase):
             max_frames=10, uniform_fallback_min=5,
         )
         self.assertGreaterEqual(len(frames), 5, "fallback should produce >=5 frames")
+
+
+class TestVariableFrameRateOutputOptions(unittest.TestCase):
+
+    def setUp(self):
+        frames.variable_frame_rate_output_options.cache_clear()
+
+    def tearDown(self):
+        frames.variable_frame_rate_output_options.cache_clear()
+
+    def _options_for_help_text(self, help_text: str) -> tuple[str, ...]:
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout=help_text, stderr="")
+        with mock.patch.object(frames.subprocess, "run", return_value=completed):
+            return frames.variable_frame_rate_output_options()
+
+    def test_uses_fps_mode_when_ffmpeg_lists_it(self):
+        help_text = "-fps_mode[:<stream_spec>]  set framerate mode for matching video streams\n"
+        self.assertEqual(self._options_for_help_text(help_text), ("-fps_mode", "vfr"))
+
+    def test_uses_vsync_on_ffmpeg_older_than_5_1(self):
+        help_text = "-vsync             video sync method\n"
+        self.assertEqual(self._options_for_help_text(help_text), ("-vsync", "vfr"))
 
 
 if __name__ == "__main__":
