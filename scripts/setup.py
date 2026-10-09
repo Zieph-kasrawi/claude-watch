@@ -249,7 +249,10 @@ def cmd_check() -> int:
     if s["missing_binaries"]:
         parts.append(f"missing binaries: {', '.join(s['missing_binaries'])}")
     if not s["has_api_key"]:
-        parts.append("no Whisper API key (GROQ_API_KEY or OPENAI_API_KEY)")
+        if platform.system() == "Darwin":
+            parts.append("no Whisper API key (Keychain groq-api-key or openai-api-key, or GROQ_API_KEY / OPENAI_API_KEY)")
+        else:
+            parts.append("no Whisper API key (GROQ_API_KEY or OPENAI_API_KEY)")
     installer = Path(__file__).resolve()
     sys.stderr.write(
         f"[watch] setup incomplete ({'; '.join(parts)}). "

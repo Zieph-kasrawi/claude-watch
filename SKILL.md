@@ -87,13 +87,13 @@ On macOS with Homebrew, it auto-installs `ffmpeg` and `yt-dlp`. On Linux/Windows
 > **Do this** (the command right below this box):
 
 ```zsh
-read -rs "PASTED_GROQ_API_KEY?Paste your Groq API key, then press return (nothing shows as you paste): "; echo; if [[ -n "$PASTED_GROQ_API_KEY" ]] && security add-generic-password -U -a "$USER" -s groq-api-key -w "$PASTED_GROQ_API_KEY" && [[ -n "$(security find-generic-password -a "$USER" -s groq-api-key -w 2>/dev/null)" ]]; then echo "✅ Saved: your Groq key is in the macOS Keychain as groq-api-key"; else echo "❌ Not saved: nothing usable was stored in the Keychain; copy the key again and rerun this"; fi; unset PASTED_GROQ_API_KEY
+read -rs "PASTED_GROQ_API_KEY?Paste your Groq API key, then press return (nothing shows as you paste): "; echo; if [[ "$PASTED_GROQ_API_KEY" =~ '^[A-Za-z0-9_-]+$' ]] && print -r -- "add-generic-password -U -a \"$USER\" -s groq-api-key -w \"$PASTED_GROQ_API_KEY\"" | security -i && [[ -n "$(security find-generic-password -a "$USER" -s groq-api-key -w 2>/dev/null)" ]]; then echo "✅ Saved: your Groq key is in the macOS Keychain as groq-api-key"; else echo "❌ Not saved: nothing usable was stored in the Keychain; copy the key again and rerun this"; fi; unset PASTED_GROQ_API_KEY
 ```
 
 If the user only has an OpenAI key, hand them the same step with OpenAI in place of Groq (key from platform.openai.com/api-keys; success line names `openai-api-key`), using this command:
 
 ```zsh
-read -rs "PASTED_OPENAI_API_KEY?Paste your OpenAI API key, then press return (nothing shows as you paste): "; echo; if [[ -n "$PASTED_OPENAI_API_KEY" ]] && security add-generic-password -U -a "$USER" -s openai-api-key -w "$PASTED_OPENAI_API_KEY" && [[ -n "$(security find-generic-password -a "$USER" -s openai-api-key -w 2>/dev/null)" ]]; then echo "✅ Saved: your OpenAI key is in the macOS Keychain as openai-api-key"; else echo "❌ Not saved: nothing usable was stored in the Keychain; copy the key again and rerun this"; fi; unset PASTED_OPENAI_API_KEY
+read -rs "PASTED_OPENAI_API_KEY?Paste your OpenAI API key, then press return (nothing shows as you paste): "; echo; if [[ "$PASTED_OPENAI_API_KEY" =~ '^[A-Za-z0-9_-]+$' ]] && print -r -- "add-generic-password -U -a \"$USER\" -s openai-api-key -w \"$PASTED_OPENAI_API_KEY\"" | security -i && [[ -n "$(security find-generic-password -a "$USER" -s openai-api-key -w 2>/dev/null)" ]]; then echo "✅ Saved: your OpenAI key is in the macOS Keychain as openai-api-key"; else echo "❌ Not saved: nothing usable was stored in the Keychain; copy the key again and rerun this"; fi; unset PASTED_OPENAI_API_KEY
 ```
 
 After they confirm, re-run `python3 "${CLAUDE_SKILL_DIR}/scripts/setup.py" --check`; exit 0 means the key was found. On Linux or Windows there is no Keychain: tell the user to put the key on the `GROQ_API_KEY=` (or `OPENAI_API_KEY=`) line of `~/.config/watch/.env` themselves, in their own editor. If they don't want to set up Whisper, proceed with `--no-whisper` and tell them videos without native captions will come back frames-only.
@@ -202,7 +202,7 @@ When `$VAULT_DIR` resolves:
 
 1. **Derive the slug now** (do not wait for Step 4.5). Take the video title from `report.md` frontmatter, slugify (lowercase, ASCII-only, hyphens, max 60 chars), append `-YYYY-MM-DD`. Example: `karpathy-claude-md-43k-installs-2026-05-24`.
 2. **Create the staging dir:** `mkdir -p "$VAULT_DIR/raw/watched/<slug>"`.
-3. **Copy `report.md` + every hero frame** (filenames in the report frontmatter under `hero_frames:`) into that dir. The report MUST live inside the vault for Obsidian to open it.
+3. **Copy `report.md` + every hero frame** (filenames in the report frontmatter under `hero_frames:`) into that dir. The report lives inside the vault so the user can read it there alongside everything else.
 4. **Print where the report is, and open nothing.** Never run `open`, an `obsidian://` URL or any other command that launches or focuses an app — bringing a window forward interrupts whatever the user is doing. Print the saved location in chat on its own line, both the vault-relative path and the full path: `📄 Report saved in your vault: raw/watched/<slug>/report.md ($VAULT_DIR/raw/watched/<slug>/report.md)`. The user opens it when they choose.
 
 Rationale: the report is the leverage point of /watch, and the user reads everything in their vault, so the report is staged there rather than left in a temporary directory. Staging at 4.4 also means Step 4.5's "Yes / Stage" branches are no-ops on the copy step (the file is already in the vault); they only differ in whether the Ingest op runs.

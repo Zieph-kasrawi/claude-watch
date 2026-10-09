@@ -34,7 +34,7 @@ read_key() {
   local service
   service="$(keychain_service_for "$name")"
   if [[ -n "$service" ]] && command -v security >/dev/null 2>&1; then
-    if security find-generic-password -a "$USER" -s "$service" -w 2>/dev/null; then
+    if security find-generic-password -a "$(id -un)" -s "$service" -w 2>/dev/null; then
       return
     fi
   fi
@@ -55,14 +55,16 @@ HAS_YTDLP=""
 command -v ffmpeg >/dev/null 2>&1 && HAS_FFMPEG="yes"
 command -v yt-dlp >/dev/null 2>&1 && HAS_YTDLP="yes"
 
-HAS_GROQ="$(read_key GROQ_API_KEY)"
-HAS_OPENAI="$(read_key OPENAI_API_KEY)"
 SETUP_COMPLETE="$(read_key SETUP_COMPLETE)"
 
 # Fully configured → silent (Claude can surface status on demand via --check).
+# Checked before any Keychain lookup so a configured setup never touches it.
 if [[ "$SETUP_COMPLETE" == "true" && -n "$HAS_FFMPEG" && -n "$HAS_YTDLP" ]]; then
   exit 0
 fi
+
+HAS_GROQ="$(read_key GROQ_API_KEY)"
+HAS_OPENAI="$(read_key OPENAI_API_KEY)"
 
 # First-run / partially-configured → one-line hint.
 if [[ -z "$HAS_FFMPEG" || -z "$HAS_YTDLP" ]]; then
