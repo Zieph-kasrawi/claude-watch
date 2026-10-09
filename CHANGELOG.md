@@ -13,11 +13,13 @@ All notable changes to `/watch` are documented here.
 - Step 4.4 now asks before writing anything (the old flow pre-staged into the vault, then deleted it on "no"). On yes it follows the library's `wiki/SCHEMA.md`: a raw transcript, an `ext-NN` source page marked as research and not adopted practice, an index line and a log entry. It copies no frames, edits no cross-cutting wiki pages and does not commit. The old Step 4.5 and its "stage for later" option are gone.
 - Step 4.4 saves nothing when no person can answer the question (a headless run, or /watch used inside another agent or workflow), so a pipeline that files its own pages never gets a duplicate `ext-` page.
 - Step 4.4 no longer runs `open obsidian://…`; it prints where the report was saved and never launches or focuses an app.
+- Scene-change frame extraction passes `-fps_mode vfr` on ffmpeg 5.1 and later and `-vsync vfr` only on older releases. ffmpeg 8 removed `-vsync`, so on current ffmpeg every default run failed with "Unrecognized option 'vsync'".
 - The "What v2 does differently" heading now says what the section covers: "What each watch produces beyond frames and a transcript".
 
 ### Added
 - 4 unit tests for the Keychain lookup in `scripts/tests/test_keychain.py`.
 - 5 unit tests for the research library setting in `scripts/tests/test_research_library.py`.
+- 2 unit tests for choosing between `-fps_mode` and `-vsync` in `scripts/tests/test_frames_scene.py`.
 
 ## [0.2.0] — 2026-05-25
 

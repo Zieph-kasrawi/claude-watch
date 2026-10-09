@@ -8,6 +8,7 @@ zooming in for detail).
 """
 from __future__ import annotations
 
+import functools
 import json
 import shutil
 import subprocess
@@ -16,6 +17,22 @@ from pathlib import Path
 
 
 MAX_FPS = 2.0
+
+
+@functools.lru_cache(maxsize=1)
+def variable_frame_rate_output_options() -> tuple[str, ...]:
+    """The ffmpeg options that keep only the frames a filter selected.
+
+    ffmpeg 5.1 replaced `-vsync` with `-fps_mode`, and ffmpeg 8 removed `-vsync`
+    entirely, so ask the installed ffmpeg which one it understands.
+    """
+    result = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-h", "long"],
+        capture_output=True, text=True,
+    )
+    if "-fps_mode" in result.stdout:
+        return ("-fps_mode", "vfr")
+    return ("-vsync", "vfr")
 
 
 def _clamp_fps(fps: float, duration_seconds: float, max_frames: int) -> tuple[float, int]:
@@ -230,7 +247,7 @@ def extract_scene_change(
     cmd += [
         "-i", str(Path(video_path).resolve()),
         "-vf", vf,
-        "-vsync", "vfr",
+        *variable_frame_rate_output_options(),
         "-frames:v", str(max_frames),
         "-q:v", "4",
         output_pattern,
