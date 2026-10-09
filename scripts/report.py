@@ -4,13 +4,13 @@
 Deterministic sections (frontmatter, pacing numbers, transcript) are filled
 by this script. Narrative sections (TL;DR, entities, concepts, etc.) are
 emitted as `<!-- pending Claude fill: <hint> -->` markers so Claude (the
-orchestrator) knows exactly what to write before offering ingest.
+orchestrator) knows exactly what to write before offering to save it.
 
-The schema is dictated by what an Obsidian-style Ingest op (see
-`$VAULT_DIR/CLAUDE.md` if the user has one) needs to extract:
-  - Entities (people, companies, tools) → wiki/entities/*
-  - Concepts (frameworks, ideas) → wiki/concepts/*
-  - Source page with TL;DR and citations → wiki/sources/*
+The schema is dictated by what filing the video in the research library
+(SKILL.md Step 4.4, governed by the library's wiki/SCHEMA.md) needs:
+  - Entities (people, companies, tools) → links to wiki/tools/*
+  - Concepts (frameworks, ideas) → links to wiki/techniques/*
+  - Source page with thesis, claims and citations → wiki/sources/*
 """
 from __future__ import annotations
 
