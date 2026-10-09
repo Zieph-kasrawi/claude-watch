@@ -11,6 +11,7 @@ All notable changes to `/watch` are documented here.
 ### Changed
 - Reports are saved to a research library instead of an Obsidian vault. The location is one setting, `WATCH_RESEARCH_LIBRARY_DIRECTORY`, resolved by the new `scripts/research_library.py`; `WATCH_VAULT_DIR` and the `~/Second brain/`, `~/Documents/Obsidian/`, `~/Obsidian/` auto-detection are removed, and an unset or invalid setting saves nothing.
 - Step 4.4 now asks before writing anything (the old flow pre-staged into the vault, then deleted it on "no"). On yes it follows the library's `wiki/SCHEMA.md`: a raw transcript, an `ext-NN` source page marked as research and not adopted practice, an index line and a log entry. It copies no frames, edits no cross-cutting wiki pages and does not commit. The old Step 4.5 and its "stage for later" option are gone.
+- Step 4.4 saves nothing when no person can answer the question (a headless run, or /watch used inside another agent or workflow), so a pipeline that files its own pages never gets a duplicate `ext-` page.
 - Step 4.4 no longer runs `open obsidian://…`; it prints where the report was saved and never launches or focuses an app.
 - The "What v2 does differently" heading now says what the section covers: "What each watch produces beyond frames and a transcript".
 
