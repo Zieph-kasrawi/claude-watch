@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import functools
 import os
-import pwd
 import shutil
 import subprocess
 import sys
@@ -43,6 +42,7 @@ def read_api_key_from_keychain(env_var_name: str) -> str | None:
     service = KEYCHAIN_SERVICE_BY_ENV_VAR.get(env_var_name)
     if service is None or sys.platform != "darwin" or shutil.which("security") is None:
         return None
+    import pwd  # Unix-only module; imported here so Windows can still load this file.
     try:
         result = subprocess.run(
             ["security", "find-generic-password", "-a", pwd.getpwuid(os.getuid()).pw_name, "-s", service, "-w"],
