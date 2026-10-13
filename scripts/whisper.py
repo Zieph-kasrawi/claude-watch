@@ -28,16 +28,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from hosted_model_roles import (  # noqa: E402
     GROQ_TRANSCRIPTION_ROLE,
     OPENAI_TRANSCRIPTION_ROLE,
-    model_id_for_role,
+    current_model_id_for_role,
+    transcription_endpoint_for_role,
 )
 from keychain import read_api_key_from_keychain  # noqa: E402
 
 
-GROQ_ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
-GROQ_MODEL = model_id_for_role(GROQ_TRANSCRIPTION_ROLE)
+TRANSCRIPTION_ROLE_BY_BACKEND = {"groq": GROQ_TRANSCRIPTION_ROLE, "openai": OPENAI_TRANSCRIPTION_ROLE}
 
-OPENAI_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions"
-OPENAI_MODEL = model_id_for_role(OPENAI_TRANSCRIPTION_ROLE)
+
+def transcription_endpoint_and_model(backend: str, api_key: str) -> tuple[str, str]:
+    """The backend's transcription endpoint and its role's current model."""
+    role = TRANSCRIPTION_ROLE_BY_BACKEND.get(backend)
+    if role is None:
+        raise SystemExit(f"Unknown whisper backend: {backend}")
+    return transcription_endpoint_for_role(role), current_model_id_for_role(role, api_key)
 
 
 def load_api_key(preferred: str | None = None) -> tuple[str, str] | tuple[None, None]:
@@ -311,12 +316,8 @@ def transcribe_video(
     size_kb = audio_path.stat().st_size / 1024
     print(f"[watch] audio: {size_kb:.0f} kB — uploading to {backend} Whisper…", file=sys.stderr)
 
-    if backend == "groq":
-        response = _post_whisper(GROQ_ENDPOINT, api_key, GROQ_MODEL, audio_path)
-    elif backend == "openai":
-        response = _post_whisper(OPENAI_ENDPOINT, api_key, OPENAI_MODEL, audio_path)
-    else:
-        raise SystemExit(f"Unknown whisper backend: {backend}")
+    endpoint, model = transcription_endpoint_and_model(backend, api_key)
+    response = _post_whisper(endpoint, api_key, model, audio_path)
 
     segments = _segments_from_response(response)
     if not segments:
@@ -344,12 +345,7 @@ def transcribe_audio(
     if not backend or not api_key:
         raise SystemExit("No Whisper API key available for transcribe_audio()")
 
-    if backend == "groq":
-        endpoint, model = GROQ_ENDPOINT, GROQ_MODEL
-    elif backend == "openai":
-        endpoint, model = OPENAI_ENDPOINT, OPENAI_MODEL
-    else:
-        raise SystemExit(f"Unknown whisper backend: {backend}")
+    endpoint, model = transcription_endpoint_and_model(backend, api_key)
 
     response = _post_whisper(
         endpoint, api_key, model, audio_path,

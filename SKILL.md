@@ -261,6 +261,7 @@ If you already watched a video this session and the user asks a follow-up, do **
 - Runs `ffmpeg` / `ffprobe` locally to extract frames as JPEGs and, when Whisper is needed, a mono 16 kHz audio clip
 - Sends the extracted audio clip to Groq's Whisper API (`api.groq.com/openai/v1/audio/transcriptions`) when `GROQ_API_KEY` is set (preferred — cheaper, faster)
 - Sends the extracted audio clip to OpenAI's audio transcription API (`api.openai.com/v1/audio/transcriptions`) when `OPENAI_API_KEY` is set and Groq is not, or when `--whisper openai` is forced
+- Before transcribing, reads that same provider's model list (`/models`) with the same key, at most once a day, so the transcription role uses the provider's newest generally available Whisper model of the same tier (never a preview or another tier); if the list cannot be read it keeps the last model it used and says so on stderr
 - Writes the downloaded video, frames, audio, and an intermediate transcript to a working directory under the system temp dir (or `--out-dir` if specified) so Claude can `Read` them
 - Reads the Whisper API key(s) from the macOS Keychain (services `groq-api-key` / `openai-api-key`) with `security find-generic-password`; the value is passed to the matching API and never printed
 - Reads / creates `~/.config/watch/.env` (mode `0600`) for a `SETUP_COMPLETE` marker and, on platforms without a Keychain, the Whisper API key(s). As a fallback, also reads `.env` in the current working directory
@@ -275,7 +276,7 @@ If you already watched a video this session and the user asks a follow-up, do **
 - Does not log, cache, or write API keys to stdout, stderr, or output files
 - Does not collect API keys through the chat — the user stores them in the Keychain with the Step 0 command
 - Does not open, launch or focus any app — it prints where the report was saved
-- Does not persist anything outside the working directory, `~/.config/watch/.env`, the Keychain items the user stored, and the research library files listed above — clean up the working directory when you're done (Step 5)
+- Does not persist anything outside the working directory, `~/.config/watch/.env`, the Keychain items the user stored, the research library files listed above, and one small file of resolved model names (no keys) under `~/.local/state/hosted-model-role-resolutions/` — clean up the working directory when you're done (Step 5)
 - Does not write to the research library without explicit user consent at the Step 4.4 prompt, and never writes to a notes vault, a memory store or any `CLAUDE.md`
 - Does not copy frames or any other image into the research library
 - Does not commit, and does not edit the library's `tools/`, `techniques/`, `analyses/` or root `index.md` pages
