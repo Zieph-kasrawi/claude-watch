@@ -25,14 +25,19 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hosted_model_roles import (  # noqa: E402
+    GROQ_TRANSCRIPTION_ROLE,
+    OPENAI_TRANSCRIPTION_ROLE,
+    model_id_for_role,
+)
 from keychain import read_api_key_from_keychain  # noqa: E402
 
 
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
-GROQ_MODEL = "whisper-large-v3"
+GROQ_MODEL = model_id_for_role(GROQ_TRANSCRIPTION_ROLE)
 
 OPENAI_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions"
-OPENAI_MODEL = "whisper-1"
+OPENAI_MODEL = model_id_for_role(OPENAI_TRANSCRIPTION_ROLE)
 
 
 def load_api_key(preferred: str | None = None) -> tuple[str, str] | tuple[None, None]:
