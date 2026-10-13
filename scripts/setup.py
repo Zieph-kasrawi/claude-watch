@@ -40,7 +40,7 @@ ENV_TEMPLATE = """# /watch API configuration
 # Whisper transcription fallback — used only when yt-dlp cannot get captions
 # (or when you point /watch at a local file with no subtitles).
 #
-# Groq is preferred: it runs whisper-large-v3 at a fraction of OpenAI's price
+# Groq is preferred: it runs Whisper at a fraction of OpenAI's price
 # and is faster in practice. OpenAI is the compatible fallback.
 #
 # Get a Groq key:  https://console.groq.com/keys

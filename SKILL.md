@@ -228,8 +228,8 @@ The script gets a timestamped transcript in one of two ways:
 
 1. **Native captions (free, preferred).** yt-dlp pulls manual or auto-generated subtitles from the source platform if available.
 2. **Whisper API fallback.** If no captions came back (or the source is a local file), the script extracts audio (`ffmpeg -vn -ac 1 -ar 16000 -b:a 64k`, ~0.5 MB/min) and uploads it to whichever Whisper API has a key configured:
-   - **Groq** — `whisper-large-v3`. Preferred default: cheaper, faster. Get a key at console.groq.com/keys.
-   - **OpenAI** — `whisper-1`. Fallback. Get a key at platform.openai.com/api-keys.
+   - **Groq** — its Whisper model (`hosted-groq-transcription-model`). Preferred default: cheaper, faster. Get a key at console.groq.com/keys.
+   - **OpenAI** — its Whisper model (`hosted-openai-transcription-model`). Fallback. Get a key at platform.openai.com/api-keys.
 
 On macOS both keys live in the Keychain (services `groq-api-key` and `openai-api-key`, stored by the Step 0 command); elsewhere they live in `~/.config/watch/.env`. Each key is looked up in the environment first, then the Keychain, then the `.env` file. The script prefers Groq when both are set; override with `--whisper openai` to force OpenAI. Use `--no-whisper` to skip the fallback entirely.
 
