@@ -19,6 +19,13 @@ from the cache (or the seed) is used, a WARNING goes to standard error, and the 
 is stamped in the cache. The daily outdated-model-pin report (claude-hermes-setup) reads
 these caches and tells the founder about every switch and every failed listing.
 
+A role whose model ID carries no generation (a size such as `-120b` instead) cannot move by
+itself. It declares `fixed_model_reason` instead of a tier, and confirm_fixed_model_is_listed
+checks the same listing once a day that the provider still serves it: when the model drops
+out of the listing, every call warns on standard error, the cache records
+`model_no_longer_listed`, and the daily report and the currency check flag it. It never
+substitutes another model.
+
 This module uses only the standard library, so it is the same file in every repository
 that has a hosted model roles file.
 """
@@ -275,3 +282,72 @@ def resolve_model_id(
     record["resolved_model_id"] = newest
     _write_state(state_file, state)
     return newest
+
+
+def confirm_fixed_model_is_listed(
+    *,
+    roles_file: Path,
+    role: str,
+    provider: str,
+    model_id: str,
+    list_model_ids: ModelLister,
+    now: Callable[[], datetime.datetime] | None = None,
+) -> str:
+    """The role's fixed model, after checking (at most once a day) that the provider still
+    lists it; warns loudly when it does not, and never returns another model."""
+    now = now or _now
+    state_file = state_file_for(roles_file)
+    state = _read_state(state_file, roles_file)
+    record = state["roles"].setdefault(role, {})
+    if (record.get("provider"), record.get("seed_model_id"), record.get("fixed_model")) != (
+        provider,
+        model_id,
+        True,
+    ):
+        record.clear()
+        record.update(provider=provider, seed_model_id=model_id, fixed_model=True)
+    record["resolved_model_id"] = model_id
+
+    def warn_when_no_longer_listed() -> None:
+        if record.get("model_no_longer_listed"):
+            print(
+                f"WARNING: {provider} no longer lists {model_id}, the fixed model of {role}; "
+                "calls to it will fail until the role is moved to a model the provider serves.",
+                file=sys.stderr,
+            )
+
+    checked_at = record.get("listing_succeeded_at")
+    if checked_at and now() - datetime.datetime.fromisoformat(checked_at) < datetime.timedelta(
+        hours=RESOLUTION_REFRESH_INTERVAL_HOURS
+    ):
+        warn_when_no_longer_listed()
+        return model_id
+    failed_at = record.get("listing_failed_at")
+    if failed_at and now() - datetime.datetime.fromisoformat(failed_at) < datetime.timedelta(
+        minutes=RETRY_AFTER_FAILED_LISTING_MINUTES
+    ):
+        warn_when_no_longer_listed()
+        return model_id
+
+    stamp = now().isoformat(timespec="seconds")
+    try:
+        listed = model_id in list_model_ids()
+    except (ModelListingError, KeyError, TypeError, ValueError) as exc:
+        record.update(listing_failed_at=stamp, listing_error=str(exc))
+        _write_state(state_file, state)
+        print(
+            f"WARNING: could not list {provider}'s models to confirm {role} ({exc}); "
+            f"still using {model_id}, which could not be checked",
+            file=sys.stderr,
+        )
+        warn_when_no_longer_listed()
+        return model_id
+    record.update(
+        listing_succeeded_at=stamp,
+        listing_failed_at=None,
+        listing_error=None,
+        model_no_longer_listed=not listed,
+    )
+    _write_state(state_file, state)
+    warn_when_no_longer_listed()
+    return model_id
